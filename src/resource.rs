@@ -1,6 +1,8 @@
 //! Get remote LLVM/Clang source
 
+use crate::config::*;
 use log::*;
+use std::io::prelude::*;
 use std::{fs, io, path::*, process::Command};
 use tempfile::TempDir;
 use url::Url;
@@ -163,12 +165,6 @@ impl Resource {
     }
 
     pub fn download(&self, dest: &Path) -> Result<()> {
-        if !dest.exists() {
-            fs::create_dir_all(dest).with(dest)?;
-        }
-        if !dest.is_dir() {
-            return Err(io::Error::new(io::ErrorKind::Other, "Not a directory")).with(dest);
-        }
         match self {
             Resource::Svn { url, .. } => Command::new("svn")
                 .args(&["co", url.as_str(), "-r", "HEAD"])
@@ -185,34 +181,68 @@ impl Resource {
                 git.check_run()?;
             }
             Resource::Tar { url } => {
-                info!("Download Tar file: {}", url);
-                let req = reqwest::blocking::get(url)?;
-                let status = req.status();
-                if !status.is_success() {
-                    return Err(Error::HttpError {
-                        url: url.into(),
-                        status,
-                    });
+                if !dest.exists() {
+                    fs::create_dir_all(dest).with(dest)?;
                 }
-                // This will be large, but at most ~100MB
-                let bytes = req.bytes()?;
-                let gz_decoder = flate2::bufread::GzDecoder::new(bytes.as_ref());
-                let mut tar_buf = tar::Archive::new(gz_decoder);
-                let entries = tar_buf
-                    .entries()
-                    .expect("Tar archive does not contain an entry");
-                // Iterate through archive contents in order to omit base path component when extracting
-                for entry in entries {
-                    let mut entry = entry.expect("Invalid entry");
-                    let path = entry.path().expect("Filename is not valid unicode");
-                    let mut target = dest.to_owned();
-                    for comp in path.components().skip(1) {
-                        target = target.join(comp);
+                if !dest.is_dir() {
+                    return Err(io::Error::new(io::ErrorKind::Other, "Not a directory")).with(dest);
+                }
+                if let Ok(path) = url::Url::parse(url) {
+                    let file_name = path
+                        .path_segments()
+                        .expect("Could not parse URL path segments")
+                        .nth_back(0);
+                    let cached_file = cache_dir()?.join(PathBuf::from(file_name.unwrap()));
+                    let mut buffer = Vec::new();
+                    if !cached_file.exists() {
+                        info!("Downloading Tar file from: {}", url);
+                        let req = reqwest::blocking::get(url)?;
+                        let status = req.status();
+                        if !status.is_success() {
+                            return Err(Error::HttpError {
+                                url: url.into(),
+                                status,
+                            });
+                        }
+                        // This will be large, but at most ~100MB
+                        buffer = req.bytes()?.to_vec();
+                        let mut file_handle = std::fs::File::create(&cached_file)
+                            .expect("Could not create archive cache file");
+                        file_handle
+                            .write(buffer.as_ref())
+                            .expect("Could not write archive cache file");
+                        info!("Wrote archive to path: {}", cached_file.display());
+                    } else {
+                        let mut file_handle = std::fs::File::open(&cached_file)
+                            .expect("Could not open cached archive file");
+                        file_handle
+                            .read_to_end(&mut buffer)
+                            .expect("Could not read cached archive file");
                     }
-                    if let Err(e) = entry.unpack(target) {
-                        match e.kind() {
-                            io::ErrorKind::AlreadyExists => debug!("{:?}", e),
-                            _ => warn!("{:?}", e),
+                    if !dest.join("build").exists() {
+                        info!(
+                            "Extracting cached archive file at path: {}",
+                            &cached_file.display()
+                        );
+                        let gz_decoder = flate2::bufread::GzDecoder::new(buffer.as_ref());
+                        let mut tar_buf = tar::Archive::new(gz_decoder);
+                        let entries = tar_buf
+                            .entries()
+                            .expect("Tar archive does not contain an entry");
+                        // Iterate through archive contents in order to omit base path component when extracting
+                        for entry in entries {
+                            let mut entry = entry.expect("Invalid entry");
+                            let path = entry.path().expect("Filename is not valid unicode");
+                            let mut target = dest.to_owned();
+                            for comp in path.components().skip(1) {
+                                target = target.join(comp);
+                            }
+                            if let Err(e) = entry.unpack(target) {
+                                match e.kind() {
+                                    io::ErrorKind::AlreadyExists => debug!("{:?}", e),
+                                    _ => warn!("{:?}", e),
+                                }
+                            }
                         }
                     }
                 }

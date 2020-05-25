@@ -152,16 +152,16 @@ fn main() -> error::Result<()> {
                     println!("{}", e);
                 }
             }
+            if clean {
+                if let Err(e) = entry.clean_build_dir() {
+                    println!("{}", e);
+                };
+            }
             if let Err(e) = entry.checkout() {
                 println!("{}", e);
             };
             if update {
                 if let Err(e) = entry.update() {
-                    println!("{}", e);
-                };
-            }
-            if clean {
-                if let Err(e) = entry.clean_build_dir() {
                     println!("{}", e);
                 };
             }
