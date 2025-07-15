@@ -55,7 +55,7 @@ impl Resource {
         if let Ok(filename) = get_filename_from_url(url_str) {
             for ext in &[".tar.gz", ".tar.xz", ".tar.bz2", ".tar.Z", ".tgz", ".taz"] {
                 if filename.ends_with(ext) {
-                    debug!("Find archive extension '{}' at the end of URL", ext);
+                    debug!("Find archive extension '{ext}' at the end of URL");
                     return Ok(Resource::Tar {
                         url: url_str.into(),
                     });
@@ -87,7 +87,7 @@ impl Resource {
         })?;
         for service in &["github.com", "gitlab.com"] {
             if url.host_str() == Some(service) {
-                debug!("URL is a cloud git service: {}", service);
+                debug!("URL is a cloud git service: {service}");
                 return Ok(Resource::Git {
                     url: strip_branch_from_url(url_str)?,
                     branch: branch.as_ref().map_or_else(
@@ -127,7 +127,7 @@ impl Resource {
         // git remote add $url
         // git ls-remote       # This must fail for SVN repo
         // ```
-        debug!("Try access with git to {}", url_str);
+        debug!("Try access with git to {url_str}");
         let tmp_dir = TempDir::new().with("/tmp")?;
         Command::new("git")
             .arg("init")
@@ -135,13 +135,13 @@ impl Resource {
             .silent()
             .check_run()?;
         Command::new("git")
-            .args(&["remote", "add", "origin"])
+            .args(["remote", "add", "origin"])
             .arg(url_str)
             .current_dir(tmp_dir.path())
             .silent()
             .check_run()?;
         match Command::new("git")
-            .args(&["ls-remote"])
+            .args(["ls-remote"])
             .current_dir(tmp_dir.path())
             .silent()
             .check_run()
@@ -152,7 +152,7 @@ impl Resource {
                     url: strip_branch_from_url(url_str)?,
                     branch: branch
                         .clone()
-                        .or_else(|| get_branch_from_url(url_str).unwrap().or_else(|| None)),
+                        .or_else(|| get_branch_from_url(url_str).unwrap().or(None)),
                 })
             }
             Err(_) => {
@@ -167,16 +167,16 @@ impl Resource {
     pub fn download(&self, dest: &Path) -> Result<()> {
         match self {
             Resource::Svn { url, .. } => Command::new("svn")
-                .args(&["co", url.as_str(), "-r", "HEAD"])
+                .args(["co", url.as_str(), "-r", "HEAD"])
                 .arg(dest)
                 .check_run()?,
             Resource::Git { url, branch } => {
-                info!("Git clone {}", url);
+                info!("Git clone {url}");
                 let mut git = Command::new("git");
-                git.args(&["clone", url.as_str(), "-q", "--depth", "1"])
+                git.args(["clone", url.as_str(), "-q", "--depth", "1"])
                     .arg(dest);
                 if let Some(branch) = branch {
-                    git.args(&["-b", branch]);
+                    git.args(["-b", branch]);
                 }
                 git.check_run()?;
             }
@@ -185,7 +185,7 @@ impl Resource {
                     fs::create_dir_all(dest).with(dest)?;
                 }
                 if !dest.is_dir() {
-                    return Err(io::Error::new(io::ErrorKind::Other, "Not a directory")).with(dest);
+                    return Err(io::Error::other("Not a directory")).with(dest);
                 }
                 if let Ok(path) = url::Url::parse(url) {
                     let file_name = path
@@ -195,7 +195,7 @@ impl Resource {
                     let cached_file = cache_dir()?.join(PathBuf::from(file_name.unwrap()));
                     let mut buffer = Vec::new();
                     if !cached_file.exists() {
-                        info!("Downloading Tar file from: {}", url);
+                        info!("Downloading Tar file from: {url}");
                         let req = reqwest::blocking::get(url)?;
                         let status = req.status();
                         if !status.is_success() {
@@ -209,7 +209,7 @@ impl Resource {
                         let mut file_handle = std::fs::File::create(&cached_file)
                             .expect("Could not create archive cache file");
                         file_handle
-                            .write(buffer.as_ref())
+                            .write_all(buffer.as_ref())
                             .expect("Could not write archive cache file");
                         info!("Wrote archive to path: {}", cached_file.display());
                     } else {
@@ -239,8 +239,8 @@ impl Resource {
                             }
                             if let Err(e) = entry.unpack(target) {
                                 match e.kind() {
-                                    io::ErrorKind::AlreadyExists => debug!("{:?}", e),
-                                    _ => warn!("{:?}", e),
+                                    io::ErrorKind::AlreadyExists => debug!("{e:?}"),
+                                    _ => warn!("{e:?}"),
                                 }
                             }
                         }
@@ -271,10 +271,10 @@ fn get_filename_from_url(url_str: &str) -> Result<String> {
     let url = ::url::Url::parse(url_str).map_err(|_| Error::InvalidUrl {
         url: url_str.into(),
     })?;
-    let seg = url.path_segments().ok_or(Error::InvalidUrl {
+    let mut seg = url.path_segments().ok_or(Error::InvalidUrl {
         url: url_str.into(),
     })?;
-    let filename = seg.last().ok_or(Error::InvalidUrl {
+    let filename = seg.next_back().ok_or(Error::InvalidUrl {
         url: url_str.into(),
     })?;
     Ok(filename.to_string())
@@ -292,7 +292,7 @@ fn strip_branch_from_url(url_str: &str) -> Result<String> {
         url: url_str.into(),
     })?;
     url.set_fragment(None);
-    Ok(url.into_string())
+    Ok(url.into())
 }
 
 #[cfg(test)]

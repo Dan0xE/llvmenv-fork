@@ -103,7 +103,7 @@ impl CommandExt for process::Command {
     }
 
     fn check_run(&mut self) -> Result<()> {
-        let cmd = format!("{:?}", self);
+        let cmd = format!("{self:?}");
         let st = self
             .status()
             .map_err(|_| Error::CommandNotFound { cmd: cmd.clone() })?;
@@ -129,7 +129,7 @@ impl CommandExt for process::Command {
     }
 
     fn check_output(&mut self) -> Result<(String, String)> {
-        let cmd = format!("{:?}", self);
+        let cmd = format!("{self:?}");
         let output = self
             .output()
             .map_err(|_| Error::CommandNotFound { cmd: cmd.clone() })?;

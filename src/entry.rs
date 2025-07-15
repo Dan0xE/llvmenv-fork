@@ -82,9 +82,10 @@ use crate::{config::*, error::*, resource::*};
 /// assert_eq!(CMakeGenerator::from_str("VisualStudio").unwrap(), CMakeGenerator::VisualStudio);
 /// assert!(CMakeGenerator::from_str("MySuperBuilder").is_err());
 /// ```
-#[derive(Deserialize, PartialEq, Debug)]
+#[derive(Deserialize, PartialEq, Debug, Default)]
 pub enum CMakeGenerator {
     /// Use platform default generator (without -G option)
+    #[default]
     Platform,
     /// Unix Makefile
     Makefile,
@@ -96,11 +97,6 @@ pub enum CMakeGenerator {
     VisualStudioWin64,
 }
 
-impl Default for CMakeGenerator {
-    fn default() -> Self {
-        CMakeGenerator::Platform
-    }
-}
 
 impl FromStr for CMakeGenerator {
     type Err = Error;
@@ -150,17 +146,13 @@ impl CMakeGenerator {
 }
 
 /// CMake build type
-#[derive(Deserialize, Debug, Clone, Copy)]
+#[derive(Deserialize, Debug, Clone, Copy, Default)]
 pub enum BuildType {
     Debug,
+    #[default]
     Release,
 }
 
-impl Default for BuildType {
-    fn default() -> Self {
-        BuildType::Release
-    }
-}
 
 /// Setting for both Remote and Local entries. TOML setting file will be decoded into this struct.
 ///
@@ -357,25 +349,25 @@ pub fn load_entry(name: &str) -> Result<Entry> {
 impl Entry {
     /// Entry for official LLVM release
     pub fn official(major: u32, minor: u32, patch: u32) -> Self {
-        let version = format!("{}.{}.{}", major, minor, patch);
-        let mut setting = EntrySetting::default();
-
-        setting.url = Some(format!(
-            "https://github.com/llvm/llvm-project/archive/llvmorg-{version}.tar.gz",
-            version = version
-        ));
-        setting.tools = vec![
-            "clang".into(),
-            "ldd".into(),
-            "lldb".into(),
-            "clang-tools-extra".into(),
-            "polly".into(),
-            "compiler-rt".into(),
-            "libcxx".into(),
-            "libcxxabi".into(),
-            "libunwind".into(),
-            "openmp".into(),
-        ];
+        let version = format!("{major}.{minor}.{patch}");
+        let setting = EntrySetting {
+            url: Some(format!(
+                "https://github.com/llvm/llvm-project/archive/llvmorg-{version}.tar.gz"
+            )),
+            tools: vec![
+                "clang".into(),
+                "ldd".into(),
+                "lldb".into(),
+                "clang-tools-extra".into(),
+                "polly".into(),
+                "compiler-rt".into(),
+                "libcxx".into(),
+                "libcxxabi".into(),
+                "libunwind".into(),
+                "openmp".into(),
+            ],
+            ..Default::default()
+        };
         Entry::parse_setting(&version, setting).unwrap()
     }
 
@@ -507,15 +499,14 @@ impl Entry {
     pub fn build(&self, nproc: usize) -> Result<()> {
         self.configure()?;
         process::Command::new("cmake")
-            .args(&[
+            .args([
                 "--build",
                 &format!("{}", self.build_dir()?.display()),
                 "--target",
                 "install",
             ])
             .args(
-                &self
-                    .setting()
+                self.setting()
                     .generator
                     .build_option(nproc, self.setting().build_type),
             )
@@ -559,7 +550,7 @@ impl Entry {
             setting.tools.join(";")
         ));
         for (k, v) in &setting.option {
-            opts.push(format!("-D{}={}", k, v));
+            opts.push(format!("-D{k}={v}"));
         }
 
         process::Command::new("cmake")

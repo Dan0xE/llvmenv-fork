@@ -122,11 +122,11 @@ fn parse_version(version: &str) -> Result<(u32, u32, u32)> {
 }
 
 fn local_builds() -> Result<Vec<Build>> {
-    Ok(glob(&data_dir()?.join("*/bin").to_str().unwrap())
+    Ok(glob(data_dir()?.join("*/bin").to_str().unwrap())
         .unwrap()
         .filter_map(|path| {
             if let Ok(path) = path {
-                path.parent().map(|path| Build::from_path(path))
+                path.parent().map(Build::from_path)
             } else {
                 None
             }

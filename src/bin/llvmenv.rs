@@ -5,7 +5,7 @@ use simplelog::*;
 use std::{
     env,
     path::PathBuf,
-    process::{exit, Command},
+    process::{Command, exit},
 };
 use structopt::StructOpt;
 
@@ -149,24 +149,24 @@ fn main() -> error::Result<()> {
             }
             if discard {
                 if let Err(e) = entry.clean_cache_dir() {
-                    println!("{}", e);
+                    println!("{e}");
                 }
             }
             if clean {
                 if let Err(e) = entry.clean_build_dir() {
-                    println!("{}", e);
+                    println!("{e}");
                 };
             }
             if let Err(e) = entry.checkout() {
-                println!("{}", e);
+                println!("{e}");
             };
             if update {
                 if let Err(e) = entry.update() {
-                    println!("{}", e);
+                    println!("{e}");
                 };
             }
             if let Err(e) = entry.build(nproc) {
-                println!("{}", e);
+                println!("{e}");
             };
         }
 
@@ -201,16 +201,16 @@ fn main() -> error::Result<()> {
             };
             let (ma, mi, pa) = build.version()?;
             if !(major || minor || patch) {
-                println!("{}.{}.{}", ma, mi, pa);
+                println!("{ma}.{mi}.{pa}");
             } else {
                 if major {
-                    print!("{}", ma);
+                    print!("{ma}");
                 }
                 if minor {
-                    print!("{}", mi);
+                    print!("{mi}",);
                 }
                 if patch {
-                    print!("{}", pa);
+                    print!("{pa}");
                 }
                 println!();
             }
@@ -243,18 +243,18 @@ fn main() -> error::Result<()> {
 
         LLVMEnv::Zsh {} => {
             let src = include_str!("../../llvmenv.zsh");
-            println!("{}", src);
+            println!("{src}");
         }
     }
     Ok(())
 }
 
 fn get_existing_build(name: &str) -> build::Build {
-    let build = build::Build::from_name(&name).unwrap();
+    let build = build::Build::from_name(name).unwrap();
     if build.exists() {
         build
     } else {
-        eprintln!("Build '{}' does not exists", name);
+        eprintln!("Build '{name}' does not exists");
         exit(1)
     }
 }
