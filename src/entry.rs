@@ -97,7 +97,6 @@ pub enum CMakeGenerator {
     VisualStudioWin64,
 }
 
-
 impl FromStr for CMakeGenerator {
     type Err = Error;
     fn from_str(generator: &str) -> Result<Self> {
@@ -152,7 +151,6 @@ pub enum BuildType {
     #[default]
     Release,
 }
-
 
 /// Setting for both Remote and Local entries. TOML setting file will be decoded into this struct.
 ///
@@ -354,21 +352,28 @@ impl Entry {
             url: Some(format!(
                 "https://github.com/llvm/llvm-project/archive/llvmorg-{version}.tar.gz"
             )),
-            tools: vec![
-                "clang".into(),
-                "ldd".into(),
-                "lldb".into(),
-                "clang-tools-extra".into(),
-                "polly".into(),
-                "compiler-rt".into(),
-                "libcxx".into(),
-                "libcxxabi".into(),
-                "libunwind".into(),
-                "openmp".into(),
-            ],
+            tools: Self::default_tools_for_version(major),
             ..Default::default()
         };
         Entry::parse_setting(&version, setting).unwrap()
+    }
+
+    fn default_tools_for_version(major: u32) -> Vec<String> {
+        let mut tools = vec![
+            "clang".into(),
+            "lld".into(),
+            "lldb".into(),
+            "clang-tools-extra".into(),
+            "polly".into(),
+            "compiler-rt".into(),
+            "openmp".into(),
+        ];
+
+        if major < 16 {
+            tools.extend_from_slice(&["libcxx".into(), "libcxxabi".into(), "libunwind".into()]);
+        }
+
+        tools
     }
 
     fn parse_setting(name: &str, setting: EntrySetting) -> Result<Self> {

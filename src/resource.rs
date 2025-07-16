@@ -196,7 +196,11 @@ impl Resource {
                     let mut buffer = Vec::new();
                     if !cached_file.exists() {
                         info!("Downloading Tar file from: {url}");
-                        let req = reqwest::blocking::get(url)?;
+                        let client = reqwest::blocking::Client::builder()
+                            .timeout(std::time::Duration::from_secs(300 * 2)) 
+                            .connect_timeout(std::time::Duration::from_secs(30))
+                            .build()?;
+                        let req = client.get(url).send()?;
                         let status = req.status();
                         if !status.is_success() {
                             return Err(Error::HttpError {
@@ -219,7 +223,7 @@ impl Resource {
                             .read_to_end(&mut buffer)
                             .expect("Could not read cached archive file");
                     }
-                    if !dest.join("build").exists() {
+                    if !dest.join("llvm").exists() {
                         info!(
                             "Extracting cached archive file at path: {}",
                             &cached_file.display()
@@ -240,10 +244,19 @@ impl Resource {
                             if let Err(e) = entry.unpack(target) {
                                 match e.kind() {
                                     io::ErrorKind::AlreadyExists => debug!("{e:?}"),
-                                    _ => warn!("{e:?}"),
+                                    _ => {
+                                        warn!("Failed to extract file: {e:?}");
+                                        return Err(io::Error::other(format!("Failed to extract archive: {e}"))).with(dest);
+                                    }
                                 }
                             }
                         }
+                        
+                        // Verify that the llvm directory was successfully extracted
+                        if !dest.join("llvm").exists() {
+                            return Err(io::Error::other("LLVM source directory not found after extraction")).with(dest);
+                        }
+                        info!("Successfully extracted LLVM source to: {}", dest.join("llvm").display());
                     }
                 }
             }
